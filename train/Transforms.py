@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import random
 import cv2
+import math
 
 __author__ = "Sachin Mehta"
 
@@ -53,7 +54,7 @@ class RandomCropResize(object):
 
             img_crop = img[y1:h-y1, x1:w-x1]
             label_crop = label[y1:h-y1, x1:w-x1]
-
+            
             img_crop = cv2.resize(img_crop, (w, h))
             label_crop = cv2.resize(label_crop, (w,h), interpolation=cv2.INTER_NEAREST)
             return img_crop, label_crop
@@ -141,7 +142,7 @@ class ToTensor(object):
         image = image.transpose((2,0,1))
 
         image_tensor = torch.from_numpy(image).div(255)
-        label_tensor =  torch.LongTensor(np.array(label, dtype=np.int)) #torch.from_numpy(label)
+        label_tensor = torch.LongTensor(np.array(label, dtype=int))
 
         return [image_tensor, label_tensor]
 

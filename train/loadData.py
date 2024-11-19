@@ -55,15 +55,16 @@ class LoadData:
                 # we expect the text file to contain the data in following format
                 # <RGB Image>, <Label Image>
                 line_arr = line.split(',')
-                img_file = ((self.data_dir).strip() + '/' + line_arr[0].strip()).strip()
-                label_file = ((self.data_dir).strip() + '/' + line_arr[1].strip()).strip()
+                img_file = line_arr[0].strip().strip()
+                label_file = line_arr[1].strip().strip()
                 label_img = cv2.imread(label_file, 0)
-                unique_values = np.unique(label_img)
-                max_val = max(unique_values)
-                min_val = min(unique_values)
+                print(label_img)
+                # unique_values = np.unique(label_img)
+                # max_val = max(unique_values)
+                # min_val = min(unique_values)
 
-                max_val_al = max(max_val, max_val_al)
-                min_val_al = min(min_val, min_val_al)
+                # max_val_al = max(max_val, max_val_al)
+                # min_val_al = min(min_val, min_val_al)
 
                 if trainStg == True:
                     hist = np.histogram(label_img, self.classes)
@@ -84,10 +85,10 @@ class LoadData:
                     self.valImList.append(img_file)
                     self.valAnnotList.append(label_file)
 
-                if max_val > (self.classes - 1) or min_val < 0:
-                    print('Labels can take value between 0 and number of classes.')
-                    print('Some problem with labels. Please check.')
-                    print('Label Image ID: ' + label_file)
+                # if max_val > (self.classes - 1) or min_val < 0:
+                #     print('Labels can take value between 0 and number of classes.')
+                #     print('Some problem with labels. Please check.')
+                #     print('Label Image ID: ' + label_file)
                 no_files += 1
 
         if trainStg == True:
@@ -109,7 +110,7 @@ class LoadData:
         return_val = self.readFile('train.txt', True)
 
         print('Processing validation data')
-        return_val1 = self.readFile('val.txt')
+        return_val1 = self.readFile('test.txt')
 
         print('Pickling data')
         if return_val ==0 and return_val1 ==0:

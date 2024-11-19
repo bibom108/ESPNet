@@ -1,6 +1,7 @@
 import torch
 import cv2
 import torch.utils.data
+import numpy as np
 
 __author__ = "Sachin Mehta"
 
@@ -31,7 +32,27 @@ class MyDataset(torch.utils.data.Dataset):
         image_name = self.imList[idx]
         label_name = self.labelList[idx]
         image = cv2.imread(image_name)
-        label = cv2.imread(label_name, 0)
+        # label = cv2.imread(label_name, 0)
+        label = cv2.imread(label_name)
+        
+        label = label[:, :, 0]
+        # label = convert_to_binary_mask(label)
+        
+        # if self.labelList[idx] is None:
+        #     print("="*50)
+        # print(self.labelList[idx], label.shape)
+        # exit()
         if self.transform:
             [image, label] = self.transform(image, label)
         return (image, label)
+
+
+def convert_to_binary_mask(mask):
+    non_road_label = np.array([255, 0, 0])
+    road_label = np.array([255, 0, 255])
+    other_road_label = np.array([0, 0, 0])
+
+    binary_mask = np.all(mask == road_label, axis=2).astype(np.uint8)
+
+    binary_mask = np.expand_dims(binary_mask, axis=-1)
+    return binary_mask

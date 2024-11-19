@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 __author__ = "Sachin Mehta"
 
@@ -325,6 +326,10 @@ class ESPNet(nn.Module):
         if encoderFile != None:
             self.encoder.load_state_dict(torch.load(encoderFile))
             print('Encoder loaded!')
+
+        classes1 = classes
+        classes = 20
+
         # load the encoder modules
         self.modules = []
         for i, m in enumerate(self.encoder.children()):
@@ -332,15 +337,18 @@ class ESPNet(nn.Module):
 
         # light-weight decoder
         self.level3_C = C(128 + 3, classes, 1, 1)
-        self.br = nn.BatchNorm2d(classes, eps=1e-03)
+        self.br = nn.BatchNorm2d(classes1, eps=1e-03)
         self.conv = CBR(19 + classes, classes, 3, 1)
 
-        self.up_l3 = nn.Sequential(nn.ConvTranspose2d(classes, classes, 2, stride=2, padding=0, output_padding=0, bias=False))
-        self.combine_l2_l3 = nn.Sequential(BR(2*classes), DilatedParllelResidualBlockB(2*classes , classes, add=False))
+        self.up_l3 = nn.Sequential(
+            nn.ConvTranspose2d(classes1, classes, 2, stride=2, padding=0, output_padding=0, bias=False))
+        self.combine_l2_l3 = nn.Sequential(BR(2 * classes),
+                                           DilatedParllelResidualBlockB(2 * classes, classes, add=False))
 
-        self.up_l2 = nn.Sequential(nn.ConvTranspose2d(classes, classes, 2, stride=2, padding=0, output_padding=0, bias=False), BR(classes))
+        self.up_l2 = nn.Sequential(
+            nn.ConvTranspose2d(classes, classes, 2, stride=2, padding=0, output_padding=0, bias=False), BR(classes))
 
-        self.classifier = nn.ConvTranspose2d(classes, classes, 2, stride=2, padding=0, output_padding=0, bias=False)
+        self.classifier = nn.ConvTranspose2d(classes, classes1, 2, stride=2, padding=0, output_padding=0, bias=False)
 
     def forward(self, input):
         '''
@@ -369,14 +377,25 @@ class ESPNet(nn.Module):
             else:
                 output2 = layer(output2)
 
-        output2_cat = self.modules[9](torch.cat([output2_0, output2], 1)) # concatenate for feature map width expansion
+        output2_cat = self.modules[9](torch.cat([output2_0, output2], 1))  # concatenate for feature map width expansion
 
-        output2_c = self.up_l3(self.br(self.modules[10](output2_cat))) #RUM
+        output2_c = self.up_l3(self.br(self.modules[10](output2_cat)))  # RUM
+        output1_C = self.level3_C(output1_cat)  # project to C-dimensional space
 
-        output1_C = self.level3_C(output1_cat) # project to C-dimensional space
-        comb_l2_l3 = self.up_l2(self.combine_l2_l3(torch.cat([output1_C, output2_c], 1))) #RUM
+
+
+        comb_l2_l3 = self.up_l2(self.combine_l2_l3(torch.cat([output1_C, output2_c], 1)))  # RUM
 
         concat_features = self.conv(torch.cat([comb_l2_l3, output0_cat], 1))
 
         classifier = self.classifier(concat_features)
         return classifier
+
+# if __name__ == '__main__':
+#     input = torch.randn((12, 3, 384, 1248))
+#     print(input.shape)
+#     model = ESPNet(2, 2, 8, "kitti_enc_2_8/model_300.pth")
+#     # model = ESPNet_Encoder(2, 2, 8)
+#     output = model(input)
+#     print(sum(p.numel() for p in model.parameters()))
+#     print(output.shape)

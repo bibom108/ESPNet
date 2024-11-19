@@ -48,14 +48,14 @@ def val(args, val_loader, model, criterion):
         # compute the loss
         loss = criterion(output, target_var)
 
-        epoch_loss.append(loss.data[0])
+        epoch_loss.append(loss.item())
 
         time_taken = time.time() - start_time
 
         # compute the confusion matrix
         iouEvalVal.addBatch(output.max(1)[1].data, target_var.data)
 
-        print('[%d/%d] loss: %.3f time: %.2f' % (i, total_batches, loss.data[0], time_taken))
+        # print('[%d/%d] loss: %.3f time: %.2f' % (i, total_batches, loss.item(), time_taken))
 
     average_epoch_loss_val = sum(epoch_loss) / len(epoch_loss)
 
@@ -77,7 +77,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch):
     model.train()
 
     iouEvalTrain = iouEval(args.classes)
-
+    
     epoch_loss = []
 
     total_batches = len(train_loader)
@@ -102,13 +102,13 @@ def train(args, train_loader, model, criterion, optimizer, epoch):
         loss.backward()
         optimizer.step()
 
-        epoch_loss.append(loss.data[0])
+        epoch_loss.append(loss.item())
         time_taken = time.time() - start_time
 
         #compute the confusion matrix
         iouEvalTrain.addBatch(output.max(1)[1].data, target_var.data)
 
-        print('[%d/%d] loss: %.3f time:%.2f' % (i, total_batches, loss.data[0], time_taken))
+        print('[%d/%d] loss: %.3f time:%.2f' % (i, total_batches, loss.item(), time_taken))
 
     average_epoch_loss_train = sum(epoch_loss) / len(epoch_loss)
 
@@ -162,10 +162,10 @@ def trainValidateSegmentation(args):
     # load the model
     if not args.decoder:
         model = net.ESPNet_Encoder(args.classes, p=p, q=q)
-        args.savedir = args.savedir + '_enc_' + str(p) + '_' + str(q) + '/'
+        args.savedir = args.savedir + '_enc_' + str(p) + '_' + str(q) + "_" + args.id + '/'
     else:
         model = net.ESPNet(args.classes, p=p, q=q, encoderFile=args.pretrained)
-        args.savedir = args.savedir + '_dec_' + str(p) + '_' + str(q) + '/'
+        args.savedir = args.savedir + '_dec_' + str(p) + '_' + str(q) + "_" + args.id + '/'
 
     if args.onGPU:
         model = model.cuda()
@@ -204,7 +204,7 @@ def trainValidateSegmentation(args):
     #compose the data with transforms
     trainDataset_main = myTransforms.Compose([
         myTransforms.Normalize(mean=data['mean'], std=data['std']),
-        myTransforms.Scale(1024, 512),
+        myTransforms.Scale(args.inWidth, args.inHeight),
         myTransforms.RandomCropResize(32),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64).
@@ -214,7 +214,7 @@ def trainValidateSegmentation(args):
 
     trainDataset_scale1 = myTransforms.Compose([
         myTransforms.Normalize(mean=data['mean'], std=data['std']),
-        myTransforms.Scale(1536, 768), # 1536, 768
+        myTransforms.Scale(int(args.inWidth*1.5), int(args.inHeight*1.5)), # 1536, 768
         myTransforms.RandomCropResize(100),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64),
@@ -224,7 +224,7 @@ def trainValidateSegmentation(args):
 
     trainDataset_scale2 = myTransforms.Compose([
         myTransforms.Normalize(mean=data['mean'], std=data['std']),
-        myTransforms.Scale(1280, 720), # 1536, 768
+        myTransforms.Scale(int(args.inWidth*1.25), int(args.inHeight*1.25)), # 1536, 768
         myTransforms.RandomCropResize(100),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64),
@@ -234,7 +234,7 @@ def trainValidateSegmentation(args):
 
     trainDataset_scale3 = myTransforms.Compose([
         myTransforms.Normalize(mean=data['mean'], std=data['std']),
-        myTransforms.Scale(768, 384),
+        myTransforms.Scale(int(args.inWidth*0.75), int(args.inHeight*0.75)),
         myTransforms.RandomCropResize(32),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64),
@@ -244,7 +244,7 @@ def trainValidateSegmentation(args):
 
     trainDataset_scale4 = myTransforms.Compose([
         myTransforms.Normalize(mean=data['mean'], std=data['std']),
-        myTransforms.Scale(512, 256),
+        myTransforms.Scale(int(args.inWidth*0.5), int(args.inHeight*0.5)),
         #myTransforms.RandomCropResize(20),
         myTransforms.RandomFlip(),
         #myTransforms.RandomCrop(64).
@@ -255,18 +255,18 @@ def trainValidateSegmentation(args):
 
     valDataset = myTransforms.Compose([
         myTransforms.Normalize(mean=data['mean'], std=data['std']),
-        myTransforms.Scale(1024, 512),
+        myTransforms.Scale(args.inWidth, args.inHeight),
         myTransforms.ToTensor(args.scaleIn),
         #
     ])
 
     # since we training from scratch, we create data loaders at different scales
     # so that we can generate more augmented data and prevent the network from overfitting
-
+    
     trainLoader = torch.utils.data.DataLoader(
         myDataLoader.MyDataset(data['trainIm'], data['trainAnnot'], transform=trainDataset_main),
         batch_size=args.batch_size + 2, shuffle=True, num_workers=args.num_workers, pin_memory=True)
-
+    
     trainLoader_scale1 = torch.utils.data.DataLoader(
         myDataLoader.MyDataset(data['trainIm'], data['trainAnnot'], transform=trainDataset_scale1),
         batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
@@ -286,7 +286,7 @@ def trainValidateSegmentation(args):
     valLoader = torch.utils.data.DataLoader(
         myDataLoader.MyDataset(data['valIm'], data['valAnnot'], transform=valDataset),
         batch_size=args.batch_size + 4, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-
+    
     if args.onGPU:
         cudnn.benchmark = True
 
@@ -304,21 +304,20 @@ def trainValidateSegmentation(args):
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
     
-
+    
     logFileLoc = args.savedir + args.logFile
     if os.path.isfile(logFileLoc):
         logger = open(logFileLoc, 'a')
     else:
         logger = open(logFileLoc, 'w')
         logger.write("Parameters: %s" % (str(total_paramters)))
-        logger.write("\n%s\t%s\t%s\t%s\t%s\t" % ('Epoch', 'Loss(Tr)', 'Loss(val)', 'mIOU (tr)', 'mIOU (val'))
+        logger.write("\n%s\t%s\t%s\t" % ('Epoch', 'Loss(Tr)', 'mIOU (tr)'))
     logger.flush()
 
     optimizer = torch.optim.Adam(model.parameters(), args.lr, (0.9, 0.999), eps=1e-08, weight_decay=5e-4)
     # we step the loss by 2 after step size is reached
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_loss, gamma=0.5)
-
-
+    
     for epoch in range(start_epoch, args.max_epochs):
 
         scheduler.step(epoch)
@@ -336,7 +335,7 @@ def trainValidateSegmentation(args):
         lossTr, overall_acc_tr, per_class_acc_tr, per_class_iu_tr, mIOU_tr = train(args, trainLoader, model, criteria, optimizer, epoch)
 
         # evaluate on validation set
-        lossVal, overall_acc_val, per_class_acc_val, per_class_iu_val, mIOU_val = val(args, valLoader, model, criteria)
+        # lossVal, overall_acc_val, per_class_acc_val, per_class_iu_val, mIOU_val = val(args, valLoader, model, criteria)
         
             
         save_checkpoint({
@@ -345,33 +344,42 @@ def trainValidateSegmentation(args):
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
             'lossTr': lossTr,
-            'lossVal': lossVal,
+            # 'lossVal': lossVal,
             'iouTr': mIOU_tr,
-            'iouVal': mIOU_val,
+            # 'iouVal': mIOU_val,
             'lr': lr
         }, args.savedir + 'checkpoint.pth.tar')
-
-        #save the model also
-        model_file_name = args.savedir + '/model_' + str(epoch + 1) + '.pth'
-        torch.save(model.state_dict(), model_file_name)
-
         
+        #save the model also
+        if (epoch + 1) % 5 == 0:
+            model_file_name = args.savedir + '/model_' + str(epoch + 1) + '.pth'
+            torch.save(model.state_dict(), model_file_name)
 
-        with open(args.savedir + 'acc_' + str(epoch) + '.txt', 'w') as log:
-            log.write("\nEpoch: %d\t Overall Acc (Tr): %.4f\t Overall Acc (Val): %.4f\t mIOU (Tr): %.4f\t mIOU (Val): %.4f" % (epoch, overall_acc_tr, overall_acc_val, mIOU_tr, mIOU_val))
-            log.write('\n')
-            log.write('Per Class Training Acc: ' + str(per_class_acc_tr))
-            log.write('\n')
-            log.write('Per Class Validation Acc: ' + str(per_class_acc_val))
-            log.write('\n')
-            log.write('Per Class Training mIOU: ' + str(per_class_iu_tr))
-            log.write('\n')
-            log.write('Per Class Validation mIOU: ' + str(per_class_iu_val))
+        # with open(args.savedir + 'acc_' + str(epoch) + '.txt', 'w') as log:
+        #     # log.write("\nEpoch: %d\t Overall Acc (Tr): %.4f\t Overall Acc (Val): %.4f\t mIOU (Tr): %.4f\t mIOU (Val): %.4f" % (epoch, overall_acc_tr, overall_acc_val, mIOU_tr, mIOU_val))
+        #     log.write("\nEpoch: %d\t Overall Acc (Tr): %.4f\t mIOU (Tr): %.4f" % (epoch, overall_acc_tr, mIOU_tr))
+        #     log.write('\n')
+        #     log.write('Per Class Training Acc: ' + str(per_class_acc_tr))
+        #     log.write('\n')
+        #     # log.write('Per Class Validation Acc: ' + str(per_class_acc_val))
+        #     # log.write('\n')
+        #     log.write('Per Class Training mIOU: ' + str(per_class_iu_tr))
+        #     # log.write('\n')
+        #     # log.write('Per Class Validation mIOU: ' + str(per_class_iu_val))
 
-        logger.write("\n%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.7f" % (epoch, lossTr, lossVal, mIOU_tr, mIOU_val, lr))
+        logger.write("\n%d\t\t%.4f\t\t%.4f\t\t%.7f" % (epoch, lossTr, mIOU_tr, lr))
         logger.flush()
         print("Epoch : " + str(epoch) + ' Details')
-        print("\nEpoch No.: %d\tTrain Loss = %.4f\tVal Loss = %.4f\t mIOU(tr) = %.4f\t mIOU(val) = %.4f" % (epoch, lossTr, lossVal, mIOU_tr, mIOU_val))
+        print("\nEpoch No.: %d\tTrain Loss = %.4f\tmIOU(tr) = %.4f\t" % (epoch, lossTr, mIOU_tr))
+
+    lossVal, overall_acc_val, per_class_acc_val, per_class_iu_val, mIOU_val = val(args, valLoader, model, criteria)
+    print("="*20)
+    print(lossVal)
+    print(overall_acc_val)
+    print(per_class_acc_val.mean())
+    print(per_class_iu_val.mean())
+    print(mIOU_val)
+
     logger.close()
 
 
@@ -379,6 +387,7 @@ def trainValidateSegmentation(args):
 if __name__ == '__main__':
 
     parser = ArgumentParser()
+    parser.add_argument('--id', default="0", help='ID of the experiment')
     parser.add_argument('--model', default="ESPNet", help='Model name')
     parser.add_argument('--data_dir', default="./city", help='Data directory')
     parser.add_argument('--inWidth', type=int, default=1024, help='Width of RGB image')
@@ -386,14 +395,14 @@ if __name__ == '__main__':
     parser.add_argument('--scaleIn', type=int, default=8, help='For ESPNet-C, scaleIn=8. For ESPNet, scaleIn=1')
     parser.add_argument('--max_epochs', type=int, default=300, help='Max. number of epochs')
     parser.add_argument('--num_workers', type=int, default=4, help='No. of parallel threads')
-    parser.add_argument('--batch_size', type=int, default=12, help='Batch size. 12 for ESPNet-C and 6 for ESPNet. '
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size. 12 for ESPNet-C and 6 for ESPNet. '
                                                                    'Change as per the GPU memory')
     parser.add_argument('--step_loss', type=int, default=100, help='Decrease learning rate after how many epochs.')
     parser.add_argument('--lr', type=float, default=5e-4, help='Initial learning rate')
     parser.add_argument('--savedir', default='./results_enc_', help='directory to save the results')
-    parser.add_argument('--visualizeNet', type=bool, default=True, help='If you want to visualize the model structure')
+    parser.add_argument('--visualizeNet', type=bool, default=False, help='If you want to visualize the model structure')
     parser.add_argument('--resume', type=bool, default=False, help='Use this flag to load last checkpoint for training')  #
-    parser.add_argument('--classes', type=int, default=20, help='No of classes in the dataset. 20 for cityscapes')
+    parser.add_argument('--classes', type=int, default=2, help='No of classes in the dataset. 20 for cityscapes')
     parser.add_argument('--cached_data_file', default='city.p', help='Cached file name')
     parser.add_argument('--logFile', default='trainValLog.txt', help='File that stores the training and validation logs')
     parser.add_argument('--onGPU', default=True, help='Run on CPU or GPU. If TRUE, then GPU.')
