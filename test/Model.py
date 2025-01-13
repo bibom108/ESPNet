@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 __author__ = "Sachin Mehta"
+
 
 class CBR(nn.Module):
     '''
@@ -374,9 +376,21 @@ class ESPNet(nn.Module):
         output2_c = self.up_l3(self.br(self.modules[10](output2_cat))) #RUM
 
         output1_C = self.level3_C(output1_cat) # project to C-dimensional space
+
+        if output1_C.shape[2:] != output2_c.shape[2:]:
+            output2_c = F.interpolate(output2_c, size=output1_C.shape[2:], mode='bilinear', align_corners=False)
+        
         comb_l2_l3 = self.up_l2(self.combine_l2_l3(torch.cat([output1_C, output2_c], 1))) #RUM
 
         concat_features = self.conv(torch.cat([comb_l2_l3, output0], 1))
 
         classifier = self.classifier(concat_features)
         return classifier
+
+if __name__ == '__main__':
+    input = torch.randn((12, 3, 562, 1863))
+    print(input.shape)
+    model = ESPNet(2, 2, 8)
+    output = model(input)
+    print(sum(p.numel() for p in model.parameters()))
+    print(output.shape)
